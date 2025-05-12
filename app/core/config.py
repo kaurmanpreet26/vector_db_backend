@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     
     # Vector Database Settings
     VECTOR_DB_PATH: str = os.getenv("VECTOR_DB_PATH", "./data/vector_db")
-    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
     
     # File Parsing Settings
     DATA_DIR: str = os.getenv("DATA_DIR", "./data/documents")

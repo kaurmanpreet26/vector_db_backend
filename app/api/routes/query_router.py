@@ -3,9 +3,13 @@ Router for vector database queries.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
+import logging
 
 from app.models.query import QueryRequest, QueryResponse, QueryResult
 from app.db.vector_db import get_vector_db
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -50,23 +54,17 @@ async def query_vector_db(
             filters=query_request.filters
         )
         
-        # Convert results to QueryResult objects
-        query_results = [
-            QueryResult(
-                document_id=result["document_id"],
-                content=result["content"],
-                metadata=result["metadata"],
-                score=result["score"]
-            )
-            for result in results["results"]
-        ]
-        
+        # The results are already in the correct format from vector_db.query
         return QueryResponse(
-            query=query_request.query,
+            query=results["query"],
             response=results["response"],
-            results=query_results
+            results=results["results"]
         )
     except Exception as e:
+        logger.error(f"Error in query_vector_db: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
             detail=f"Error querying vector database: {str(e)}"

@@ -41,8 +41,12 @@ class VectorDB:
         self.embedding_model = embedding_model
         
         try:
-            # Create embeddings
-            self.embeddings = HuggingFaceEmbeddings(model_name=embedding_model)
+            # Create embeddings with specific model parameters
+            self.embeddings = HuggingFaceEmbeddings(
+                model_name=embedding_model,
+                model_kwargs={'device': 'cpu'},
+                encode_kwargs={'normalize_embeddings': True}
+            )
             
             # Create or load the vector database
             os.makedirs(db_path, exist_ok=True)
@@ -54,6 +58,10 @@ class VectorDB:
             # Log database state
             self._log_database_state()
         except Exception as e:
+            logger.error(f"Error initializing vector database: {str(e)}")
+            logger.error(f"Error type: {type(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise Exception(f"Error initializing vector database: {str(e)}")
         
         # Text splitter for chunking documents
@@ -374,14 +382,7 @@ Remember:
         filter_arg = filters if is_valid_filter(filters) else None
 
         try:
-            # Get raw results without score first to check if we have any matches
-            raw_results = self.db.similarity_search(
-                query=query_text,
-                k=limit,
-                filter=filter_arg
-            )
-            
-            # Now get results with scores
+            # Get results with scores
             results = self.db.similarity_search_with_score(
                 query=query_text,
                 k=limit,
@@ -410,7 +411,8 @@ Remember:
             # Always process results through Gemini if requested
             if use_gemini:
                 structured_response = self._process_with_gemini(query_text, query_results)
-                # Return the complete response including both the Gemini response and results
+                # Convert QueryResult objects to dicts for the final response
+                structured_response["results"] = [r.dict() for r in query_results]
                 return structured_response
             
             return {
@@ -420,6 +422,9 @@ Remember:
             }
         except Exception as e:
             logger.error(f"Error during query: {str(e)}")
+            logger.error(f"Error type: {type(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise Exception(f"Error querying vector database: {str(e)}")
 
 def init_vector_db() -> VectorDB:
