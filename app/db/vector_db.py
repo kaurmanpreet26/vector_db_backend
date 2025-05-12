@@ -58,8 +58,8 @@ class VectorDB:
         
         # Text splitter for chunking documents
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=500,
-            chunk_overlap=100,
+            chunk_size=200,
+            chunk_overlap=50,
             length_function=len,
         )
         
@@ -246,6 +246,136 @@ Remember:
         
         return document.id
     
+    def _is_generic_query(self, query_text: str) -> bool:
+        """
+        Check if the query is a generic greeting or small talk.
+        
+        Args:
+            query_text: The query text to check
+            
+        Returns:
+            True if the query is generic, False otherwise
+        """
+        generic_queries = [
+            # Basic greetings
+            "hi", "hello", "hey", "hiya", "yo",
+            "hi there", "hello there", "hey there",
+            
+            # Time-based greetings
+            "good morning", "good afternoon", "good evening",
+            "morning", "afternoon", "evening",
+            
+            # How are you variations
+            "how are you", "how's it going", "how's everything",
+            "how are you doing", "how have you been",
+            "how's your day", "how's your day going",
+            "how's life", "how's everything going",
+            
+            # What's up variations
+            "what's up", "whats up", "what's new",
+            "what's happening", "what's going on",
+            "what's the latest", "what's new with you",
+            
+            # Formal greetings
+            "greetings", "salutations", "how do you do",
+            "pleased to meet you", "nice to meet you",
+            
+            # Small talk
+            "how's the weather", "nice weather", "beautiful day",
+            "how's your weekend", "how was your weekend",
+            "how's your week", "how was your week",
+            
+            # Thank you variations
+            "thanks", "thank you", "thanks a lot",
+            "thank you so much", "appreciate it",
+            
+            # Goodbye variations
+            "bye", "goodbye", "see you", "see you later",
+            "take care", "have a good day", "have a nice day",
+            
+            # Polite responses
+            "you're welcome", "no problem", "anytime",
+            "my pleasure", "don't mention it",
+            
+            # Help requests
+            "can you help me", "i need help", "help me",
+            "i have a question", "i need assistance"
+        ]
+        
+        query_lower = query_text.lower().strip()
+        return any(greeting in query_lower for greeting in generic_queries)
+
+    def _get_generic_response(self, query_text: str) -> Dict[str, Any]:
+        """
+        Generate a response for generic queries with context-aware responses.
+        
+        Args:
+            query_text: The generic query text
+            
+        Returns:
+            Dictionary containing the response
+        """
+        if not self.gemini_model:
+            return {
+                "query": query_text,
+                "response": "Hello! I'm your HR assistant. How can I help you today?",
+                "results": []
+            }
+        
+        query_lower = query_text.lower().strip()
+        
+        # Determine the type of query
+        if any(greeting in query_lower for greeting in ["hi", "hello", "hey", "hiya", "yo", "hi there", "hello there", "hey there"]):
+            prompt = f"""You are a friendly HR assistant. The user has greeted you with: "{query_text}"
+            Respond in a warm, conversational way. Introduce yourself as an HR assistant and ask how you can help them with HR-related questions.
+            Keep it brief and natural."""
+            
+        elif any(time_greeting in query_lower for time_greeting in ["good morning", "good afternoon", "good evening", "morning", "afternoon", "evening"]):
+            prompt = f"""You are a friendly HR assistant. The user has greeted you with: "{query_text}"
+            Respond with an appropriate time-based greeting and introduce yourself as an HR assistant.
+            Ask how you can help them with HR-related questions today."""
+            
+        elif any(how_are_you in query_lower for how_are_you in ["how are you", "how's it going", "how's everything", "how are you doing"]):
+            prompt = f"""You are a friendly HR assistant. The user has asked: "{query_text}"
+            Respond warmly, briefly mention you're doing well, and pivot to asking how you can help them with HR-related questions.
+            Keep it professional but friendly."""
+            
+        elif any(thanks in query_lower for thanks in ["thanks", "thank you", "thanks a lot", "thank you so much", "appreciate it"]):
+            prompt = f"""You are a friendly HR assistant. The user has said: "{query_text}"
+            Respond with a warm acknowledgment and offer to help with anything else they need.
+            Keep it brief and professional."""
+            
+        elif any(bye in query_lower for bye in ["bye", "goodbye", "see you", "see you later", "take care"]):
+            prompt = f"""You are a friendly HR assistant. The user has said: "{query_text}"
+            Respond with a warm goodbye and remind them they can return anytime for HR-related assistance.
+            Keep it brief and professional."""
+            
+        elif any(help in query_lower for help in ["can you help me", "i need help", "help me", "i have a question", "i need assistance"]):
+            prompt = f"""You are a friendly HR assistant. The user has asked for help with: "{query_text}"
+            Respond warmly and ask what specific HR-related question or topic they need help with.
+            Mention you can help with policies, benefits, or other HR matters."""
+            
+        else:
+            # Default response for other generic queries
+            prompt = f"""You are a friendly HR assistant. The user has said: "{query_text}"
+            Respond in a warm, conversational way. Introduce yourself as an HR assistant and ask how you can help them with HR-related questions.
+            Keep it brief and natural."""
+        
+        try:
+            response = self.gemini_model.generate_content(prompt)
+            return {
+                "query": query_text,
+                "response": response.text,
+                "results": []
+            }
+        except Exception as e:
+            logger.error(f"Error generating generic response: {str(e)}")
+            return {
+                "query": query_text,
+                "response": "Hello! I'm your HR assistant. How can I help you today?",
+                "results": []
+            }
+
     def query(
         self, 
         query_text: str, 
@@ -265,14 +395,19 @@ Remember:
         Returns:
             Dictionary containing query results and structured response
         """
+        # Check if it's a generic query first
+        if self._is_generic_query(query_text):
+            logger.info(f"Detected generic query: {query_text}")
+            return self._get_generic_response(query_text)
+
         def is_valid_filter(filters: Optional[Dict[str, Any]]) -> bool:
-           if not filters or not isinstance(filters, dict):
-            return False
-        # Check if values are dicts with exactly one operator key
-           for value in filters.values():
-            if not isinstance(value, dict) or len(value) != 1:
-              return False
-           return True
+            if not filters or not isinstance(filters, dict):
+                return False
+            # Check if values are dicts with exactly one operator key
+            for value in filters.values():
+                if not isinstance(value, dict) or len(value) != 1:
+                    return False
+            return True
 
         # Log database state before query
         self._log_database_state()
@@ -312,6 +447,8 @@ Remember:
                 logger.info(f"  Content: {doc.page_content[:200]}...")
                 logger.info(f"  Metadata: {doc.metadata}")
                 logger.info("---")
+                # Print full chunk content and similarity for debugging
+                print(f"CHUNK DEBUG: Similarity={similarity:.4f} | Content={doc.page_content}")
             
             # Now process results with threshold
             for doc, score in results:
