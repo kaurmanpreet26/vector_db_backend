@@ -1,0 +1,25 @@
+# FastAPI and Server
+fastapi>=0.68.0
+uvicorn>=0.15.0
+python-multipart>=0.0.5
+python-dotenv>=0.19.0
+
+# Vector Database and Document Processing
+numpy<2.0.0  # Specific version constraint for compatibility
+faiss-cpu==1.7.4  # Specific version for numpy compatibility
+chromadb>=0.4.0
+langchain>=0.1.0
+langchain-community>=0.0.10
+langchain-huggingface>=0.0.5
+sentence-transformers>=2.2.2
+PyPDF2>=3.0.0
+python-docx>=0.8.11
+beautifulsoup4>=4.9.3
+markdown>=3.3.4
+
+# Google AI Integration
+google-generativeai>=0.3.0
+
+# Testing and Development
+pytest>=7.0.0
+httpx>=0.24.0
